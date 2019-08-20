@@ -310,7 +310,7 @@ class Domain:
             extended_xi += list((e_center.logical_coords[0] + 2)[:overlap])
         return [np.asarray(extended_xi)]
 
-    def set_data(self, data, fields, fields_valence=None, **kwargs):
+    def set_data(self, data, fields, fields_valence=None, order='C', **kwargs):
         """
         Distributes the `data` to all elements.
 
@@ -323,6 +323,8 @@ class Domain:
             The name of a field or a list of multiple fields. The data is set on the elements as attributes with the field names.
         fields_valence : int or list
             The of the field, or a list of valences for each field in `fields`. Defaults to 0 (scalar fields).
+        order: str
+            Layout of flattened array `data`. See documentation for numpy.reshape or numpy.flatten for possible values.
         """
         if isinstance(fields, str):
             fields = [fields]
@@ -352,8 +354,9 @@ class Domain:
                 num_dofs = self.dim**fields_valence[i]
                 num_points = np.prod(e.num_points)
                 if is_flattened:
-                    element_data = np.reshape(
-                        data[k:k + num_points * num_dofs], valence_shape + tuple(e.num_points))
+                    element_data = np.reshape(np.reshape(data[k:k + num_points * num_dofs],
+                        valence_shape + (np.product(e.num_points),)),
+                            valence_shape + tuple(e.num_points), order=order)
                     k += num_points * num_dofs
                 else:
                     element_data = np.reshape(
@@ -361,17 +364,15 @@ class Domain:
                     k += num_points
                 setattr(e, field, element_data)
 
-    def get_data(self, fields):
+    def get_data(self, fields, order='C'):
         """Retrieve the datasets of the specified fields as a flat array."""
         if isinstance(fields, str):
             fields = [fields]
-        return np.array([
-            functools.reduce(
-                lambda a, b: np.append(a, b),
-                [getattr(e, field) for field in fields],
-                np.array([])
-            ) for e in self.elements
-        ]).flatten()
+        return np.concatenate([
+            np.concatenate([
+                getattr(e, field).flatten(order=order)
+                for field in fields])
+            for e in self.elements])
 
     def apply(self, operator, field, result_field, *args, **kwargs):
         for e in self.elements:
