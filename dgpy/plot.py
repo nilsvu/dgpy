@@ -44,7 +44,7 @@ def plot_dg(field, domain, show_element_boundaries=True, show_collocation_points
 
             if show_element_boundaries:
                 for element_boundary in np.squeeze(e.extents):
-                    boundary_handle = plt.axvline(
+                    boundary_handle = ax.axvline(
                         element_boundary, color='black')
             ax.plot(
                 np.squeeze(e.inertial_coords),

@@ -13,6 +13,8 @@ def mass_matrix(e, d):
     p = e.num_points[d]
     if not (p in precomputed_massmats):
         precomputed_massmats[p] = logical_mass_matrix(e.collocation_points[d])
+    # This way of handling the jacobian only works because it is constant for
+    # our rectangular mesh.
     return e.inertial_to_logical_jacobian[d, d] * precomputed_massmats[p]
 
 
@@ -25,6 +27,8 @@ def diag_mass_matrix(e, d):
     if not (p in precomputed_diag_massmats):
         precomputed_diag_massmats[p] = diag_logical_mass_matrix(
             e.quadrature_weights[d])
+    # This way of handling the jacobian only works because it is constant for
+    # our rectangular mesh.
     return e.inertial_to_logical_jacobian[d, d] * precomputed_diag_massmats[p]
 
 
@@ -119,7 +123,7 @@ def compute_div(v, e):
 def compute_mass(u, e):
     Mu = u
     for d in range(e.dim):
-        #         M = diag_mass_matrix(e, d)
+        # M = diag_mass_matrix(e, d)
         M = mass_matrix(e, d)
         axis = (u.ndim - e.dim) + d
         Mu = apply_matrix(M, Mu, axis)
@@ -169,24 +173,57 @@ def basis(e, face=None):
     return phi
 
 
-def lift_flux(u, face):
-    return quadrature(
-        face,
-        u.reshape(*u.shape, *((face.dim + 1) *
-                              [1])) * basis(face.element, face),
-        u.ndim - face.dim
-    )
+def lift_flux(u, face, scheme='quadrature'):
+    valence = u.ndim - face.dim
+    if scheme == 'quadrature':
+        return quadrature(
+            face,
+            u.reshape(*u.shape, *((face.dim + 1) *
+                                  [1])) * basis(face.element, face),
+            valence
+        )
+    elif scheme == 'mass_matrix':
+        result_slice = u
+        for d in range(face.dim):
+            result_slice = apply_matrix(mass_matrix(face, d), result_slice, d + valence)
+        result = np.zeros(valence * (face.element.dim,) + tuple(face.element.num_points))
+        slc = (slice(None),) * (valence + face.dimension) + (face.slice_index(),)
+        result[slc] = result_slice
+        return result
+    else:
+        raise NotImplementedError
 
-
+def lift_deriv_flux(v, face, scheme='quadrature'):
+    valence = v.ndim - 1 - face.dim
+    if scheme == 'quadrature':
+        v_broadcast_over_basis = v.reshape(*v.shape, *((face.dim + 1) * [1]))
+        integrand = np.einsum('j...,j...', v_broadcast_over_basis, basis_deriv(face.element, face))
+        return quadrature(
+            face,
+            integrand,
+            valence
+        )
+    elif scheme == 'mass_matrix':
+        v_lifted = lift_flux(v, face, scheme)
+        result = np.zeros(v_lifted.shape[1:])
+        for d in range(face.element.dim):
+            result += apply_matrix(differentiation_matrix(face.element, d).T, v_lifted[d], d + valence)
+        return result
+    else:
+        raise NotImplementedError
+     
+# TODO: move to IP scheme
 def penalty(face, penalty_parameter):
     num_points = face.element.num_points[face.dimension]
-    p = num_points
-    h = np.squeeze(np.diff(face.element.extents[face.dimension]))
+#     p = num_points - 1
+#     h = np.squeeze(np.diff(face.element.extents[face.dimension]))
+    h = 2 * face.element.inertial_to_logical_jacobian[face.dimension, face.dimension]
     # H&W use "N + 1" which is num_points, but Trevor knows a paper where they show num_points-1 is sufficient
     # However: weak_primal scheme, h=2, p=6 fails for num_points-1, so using num_points for now
-    return penalty_parameter * p**2 / h
+    return penalty_parameter * num_points**2 / h
 
 
+# TODO: remove
 def lift_internal_penalty(u, face, penalty_parameter):
     sigma = penalty(face, penalty_parameter)
     # exterior_face_factor = 1 if face.is_in('external') else 0.5
