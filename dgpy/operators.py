@@ -133,7 +133,7 @@ def compute_mass(u, e):
 def compute_inverse_mass(u, e):
     Mu = u
     for d in range(e.dim):
-        M = np.linalg.inv(diag_mass_matrix(e, d))
+        M = np.linalg.inv(mass_matrix(e, d))
         axis = (u.ndim - e.dim) + d
         Mu = apply_matrix(M, Mu, axis)
     return Mu
@@ -173,7 +173,7 @@ def basis(e, face=None):
     return phi
 
 
-def lift_flux(u, face, scheme='quadrature'):
+def lift_flux(u, face, scheme='mass_matrix'):
     valence = u.ndim - face.dim
     if scheme == 'quadrature':
         return quadrature(
