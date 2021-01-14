@@ -7,7 +7,7 @@ def build_matrix(operator):
     return np.transpose(np.array([operator @ np.eye(operator.shape[0])[i] for i in range(operator.shape[1])]))
 
 
-def l2_error(domain, field, analytic_field, method='quadrature'):
+def l2_error(domain, field, analytic_field, method='pointwise'):
     if method == 'quadrature':
         return np.sqrt(domain.reduce(
             lambda x, y: x + y,
