@@ -120,20 +120,19 @@ def compute_div(v, e):
     return div_v
 
 
-def compute_mass(u, e):
+def compute_mass(u, e, mass_lumping):
     Mu = u
     for d in range(e.dim):
-        # M = diag_mass_matrix(e, d)
-        M = mass_matrix(e, d)
+        M = (diag_mass_matrix if mass_lumping else mass_matrix)(e, d)
         axis = (u.ndim - e.dim) + d
         Mu = apply_matrix(M, Mu, axis)
     return Mu
 
 
-def compute_inverse_mass(u, e):
+def compute_inverse_mass(u, e, mass_lumping):
     Mu = u
     for d in range(e.dim):
-        M = np.linalg.inv(mass_matrix(e, d))
+        M = np.linalg.inv((diag_mass_matrix if mass_lumping else mass_matrix)(e, d))
         axis = (u.ndim - e.dim) + d
         Mu = apply_matrix(M, Mu, axis)
     return Mu
@@ -173,7 +172,7 @@ def basis(e, face=None):
     return phi
 
 
-def lift_flux(u, face, scheme='mass_matrix'):
+def lift_flux(u, face, scheme, mass_lumping):
     valence = u.ndim - face.dim
     if scheme == 'quadrature':
         return quadrature(
@@ -185,7 +184,9 @@ def lift_flux(u, face, scheme='mass_matrix'):
     elif scheme == 'mass_matrix':
         result_slice = u
         for d in range(face.dim):
-            result_slice = apply_matrix(mass_matrix(face, d), result_slice, d + valence)
+            M_on_face = (diag_mass_matrix if mass_lumping else mass_matrix)(face, d)
+            result_slice = apply_matrix(
+                M_on_face, result_slice, d + valence)
         result = np.zeros(valence * (face.element.dim,) + tuple(face.element.num_points))
         slc = (slice(None),) * (valence + face.dimension) + (face.slice_index(),)
         result[slc] = result_slice
@@ -193,7 +194,7 @@ def lift_flux(u, face, scheme='mass_matrix'):
     else:
         raise NotImplementedError
 
-def lift_deriv_flux(v, face, scheme='quadrature'):
+def lift_deriv_flux(v, face, scheme):
     valence = v.ndim - 1 - face.dim
     if scheme == 'quadrature':
         v_broadcast_over_basis = v.reshape(*v.shape, *((face.dim + 1) * [1]))
