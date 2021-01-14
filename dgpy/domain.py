@@ -258,7 +258,7 @@ class Domain:
                             num_points=self.num_points)
                 e.id = element_id
                 self.indexed_elements[e.id] = e
-            self.elements = self.indexed_elements.values()
+            self.elements = sorted(self.indexed_elements.values(), key=lambda e: e.id)
         else:
             logger.debug(
                 "Creating domain with {} elements".format(len(elements)))
