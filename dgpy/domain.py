@@ -337,7 +337,12 @@ class Domain:
             extended_xi += list((e_center.logical_coords[0] + 2)[:overlap])
         return [np.asarray(extended_xi)]
 
-    def set_data(self, data, fields, fields_valence=None, order='C', **kwargs):
+    def set_data(self,
+                 data,
+                 fields,
+                 fields_valence=None,
+                 storage_order='C',
+                 **kwargs):
         """
         Distributes the `data` to all elements.
 
@@ -350,7 +355,7 @@ class Domain:
             The name of a field or a list of multiple fields. The data is set on the elements as attributes with the field names.
         fields_valence : int or list
             The of the field, or a list of valences for each field in `fields`. Defaults to 0 (scalar fields).
-        order: str
+        storage_order: str
             Layout of flattened array `data`. See documentation for numpy.reshape or numpy.flatten for possible values.
         """
         if isinstance(fields, str):
@@ -383,7 +388,7 @@ class Domain:
                 if is_flattened:
                     element_data = np.reshape(np.reshape(data[k:k + num_points * num_dofs],
                         valence_shape + (np.product(e.num_points),)),
-                            valence_shape + tuple(e.num_points), order=order)
+                            valence_shape + tuple(e.num_points), order=storage_order)
                     k += num_points * num_dofs
                 else:
                     element_data = np.reshape(
@@ -391,13 +396,17 @@ class Domain:
                     k += num_points
                 setattr(e, field, element_data)
 
-    def get_data(self, fields, order='C'):
+    def get_data(self, fields, storage_order='C'):
         """Retrieve the datasets of the specified fields as a flat array."""
         if isinstance(fields, str):
             fields = [fields]
         return np.concatenate([
             np.concatenate([
-                getattr(e, field).flatten(order=order)
+                np.concatenate([
+                    getattr(e, field)[component].flatten(order=storage_order)
+                    for component in itertools.product(*map(
+                        range,
+                        getattr(e, field).shape[:-e.dim]))])
                 for field in fields])
             for e in self.elements])
 
