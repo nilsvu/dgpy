@@ -2,16 +2,24 @@ import numpy as np
 import itertools
 import logging
 import functools
+import enum
 
 from .spectral import lgl_points, lgl_weights, inertial_coords
 from .plot import *
 
+
+class BoundaryCondition(enum.Enum):
+    DIRICHLET = enum.auto()
+    NEUMANN = enum.auto()
+
+
 class Face:
-    def __init__(self, element, dimension, direction, is_exterior=False):
+    def __init__(self, element, dimension, direction, is_exterior=False, boundary_condition=None):
         self.element = element
         self.dimension = dimension
         self.direction = direction
         self.is_exterior = is_exterior
+        self.boundary_condition = boundary_condition
 
         self.dim = element.dim - 1
         self.extents = np.delete(element.extents, dimension, axis=0)
@@ -54,8 +62,12 @@ class Face:
             category == 'any' \
             or category == 'internal' and not (self.is_exterior or self.opposite_face.is_exterior) \
             or category == 'external' and self.opposite_face.is_exterior \
+            or category == 'dirichlet' and self.boundary_condition == BoundaryCondition.DIRICHLET \
+            or category == 'neumann' and self.boundary_condition == BoundaryCondition.NEUMANN \
             or category == 'exterior' and self.is_exterior \
-            or category == 'interior' and not self.is_exterior
+            or category == 'interior' and not self.is_exterior \
+            or category == 'interior_and_dirichlet' and (not self.is_exterior or self.boundary_condition == BoundaryCondition.DIRICHLET) \
+            or category == 'interior_and_neumann' and (not self.is_exterior or self.boundary_condition == BoundaryCondition.NEUMANN)
 
     def slice_index(self):
         if not self.is_exterior:
@@ -148,6 +160,14 @@ class Element:
         """Faces to the domain boundary"""
         return (face for face in self.faces if face.is_in('external'))
 
+    def get_dirichlet_faces(self):
+        """Faces to the domain boundary with Dirichlet conditions"""
+        return (face for face in self.faces if face.is_in('dirichlet'))
+
+    def get_neumann_faces(self):
+        """Faces to the domain boundary with Neumann conditions"""
+        return (face for face in self.faces if face.is_in('neumann'))
+
     def get_exterior_faces(self):
         """\"Ghost\"-faces of the non-existent elements across the domain boundary (used to impose boundary conditions)"""
         return (face for face in self.faces if face.is_in('exterior'))
@@ -169,12 +189,13 @@ class Element:
             setattr(face, field, field_on_slice)
 
 
+
 class Domain:
     """A D-dimensional computational domain"""
 
     logger = logging.getLogger('Domain')
 
-    def __init__(self, extents=None, num_elements=None, num_points=None, elements=None, element_ids=None):
+    def __init__(self, extents=None, num_elements=None, num_points=None, elements=None, element_ids=None, boundary_conditions=None):
         """
         Create a D-dimensional computational domain.
 
@@ -254,6 +275,9 @@ class Domain:
 
             self.num_elements = np.max(np.asarray(element_ids), axis=0)
 
+        if boundary_conditions is None:
+            boundary_conditions = self.dim * [(BoundaryCondition.DIRICHLET, BoundaryCondition.DIRICHLET)]
+
         # Connect faces
         for e in self.elements:
             for face in list(e.faces):
@@ -267,7 +291,8 @@ class Domain:
                             d, -direction, False)]
                     else:
                         ghost_face = Face(
-                            e, dimension=d, direction=-direction, is_exterior=True)
+                            e, dimension=d, direction=-direction, is_exterior=True,
+                            boundary_condition=boundary_conditions[d][0 if direction == -1 else 1])
                         e.indexed_faces[(d, -direction, True)] = ghost_face
                         face.opposite_face = ghost_face
                         ghost_face.opposite_face = face
