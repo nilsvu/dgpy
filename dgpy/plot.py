@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from .spectral import inertial_coords
-from .interpolate import *
+from .interpolate import lagrange_interpolate
 
 
 def plot_dg(field, domain, show_element_boundaries=True, show_collocation_points=True, field_slice=None, slice_dim=None, slice_index=None, ax=None, label=None, color='darkorange', **plot_kwargs):
