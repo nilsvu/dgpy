@@ -137,6 +137,8 @@ class Element:
         self.inertial_coords = inertial_coords(
             self.logical_coords, self.extents)
 
+        # TODO: rename this just "jacobian". It is dx_i/dxi_j, so the Jacobian
+        # of the element-map xi -> x
         self.inertial_to_logical_jacobian = np.diag(
             np.squeeze(np.diff(extents, axis=-1), axis=-1) / 2)
         self.inertial_to_logical_jacobian_det = np.linalg.det(
