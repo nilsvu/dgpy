@@ -2,15 +2,14 @@ import numpy as np
 import itertools
 import logging
 import functools
-import enum
 
-from .spectral import lgl_points, lgl_weights, inertial_coords
+from .spectral import lgl_points, lgl_weights, inertial_coords, logical_coords
 from .plot import *
 
 
-class BoundaryCondition(enum.Enum):
-    DIRICHLET = enum.auto()
-    NEUMANN = enum.auto()
+class BoundaryCondition:
+    DIRICHLET = "DIRICHLET"
+    NEUMANN = "NEUMANN"
 
 
 class Face:
@@ -29,10 +28,17 @@ class Face:
         self.quadrature_weights = np.delete(
             element.quadrature_weights, dimension, axis=0)
 
-        self.logical_coords = np.array(np.meshgrid(
-            *self.collocation_points, indexing='ij'))
+        collocation_points_in_vol = []
+        for d in range(element.dim):
+            if d == dimension:
+                collocation_points_in_vol.append(
+                    np.array([(-1 if is_exterior else 1) * float(direction)]))
+            else:
+                collocation_points_in_vol.append(element.collocation_points[d])
+        self.logical_coords = np.take(np.meshgrid(
+            *collocation_points_in_vol, indexing='ij'), 0, dimension + 1)
         self.inertial_coords = inertial_coords(
-            self.logical_coords, self.extents)
+            self.logical_coords, element.extents)
 
         self.inertial_to_logical_jacobian = np.delete(np.delete(
             element.inertial_to_logical_jacobian, dimension, axis=0), dimension, axis=1)
@@ -184,8 +190,6 @@ class Element:
             if face.is_in(category):
                 field_on_slice = np.take(field_in_volume, face.slice_index(
                 ), axis=face.dimension + (field_in_volume.ndim - self.dim))
-                if face.is_exterior:
-                    field_on_slice *= -1  # Dirichlet conditions
             else:
                 field_on_slice = None
             setattr(face, field, field_on_slice)
