@@ -65,8 +65,9 @@ def logical_coords(x, bounds):
     """Maps inertial to logical coordinates for rectilinear domains
 
     Args:
-      x: Inertial coordinates. Must be a d-dimensional array, where d is the
-        dimension of the domain.
+      x: Inertial coordinates. The first dimension of the array must correspond
+        to the dimension of the domain, i.e. x[0] is the x-coordinate, x[1] is
+        the y-coordinate etc.
       bounds: The (lower, upper) bounds of the element in inertial coordinates,
         in every dimension. For example: [(0, 1), (0.5, 3.5)]
     """
@@ -87,8 +88,9 @@ def inertial_coords(xi, bounds):
     """Maps logical to inertial coordinates for rectilinear domains
 
     Args:
-      xi: Logical coordinates. Must be a d-dimensional array, where d is the
-        dimension of the domain.
+      x: Logical coordinates. The first dimension of the array must correspond
+        to the dimension of the domain, i.e. xi[0] is the xi-coordinate, xi[1]
+        is the eta-coordinate etc.
       bounds: The (lower, upper) bounds of the element in inertial coordinates,
         in every dimension. For example: [(0, 1), (0.5, 3.5)]
     """
