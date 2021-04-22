@@ -210,7 +210,7 @@ class DgOperator(LinearOperator):
                  formulation='flux',
                  scheme='strong',
                  numerical_flux='ip',
-                 penalty_parameter=1.5,
+                 penalty_parameter=1.,
                  lifting_scheme='mass_matrix',
                  massive=True,
                  mass_lumping=False,
