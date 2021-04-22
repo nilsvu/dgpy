@@ -28,3 +28,31 @@ class TestSpectral(unittest.TestCase):
         npt.assert_allclose(spectral.lg_weights(1), [2])
         npt.assert_allclose(spectral.lg_weights(2), [1, 1])
         npt.assert_allclose(spectral.lg_weights(3), [5 / 9, 8 / 9, 5 / 9])
+
+    def test_logical_coords(self):
+        npt.assert_allclose(
+            spectral.logical_coords([[0, 0.5, 1]], bounds=[(0, 1)]),
+            [[-1, 0, 1]])
+        npt.assert_allclose(
+            spectral.logical_coords([[0, 0.5, 1], [0.5, 1.5, 3.5]],
+                                    bounds=[(0, 1), (0.5, 3.5)]),
+            [[-1, 0, 1], [-1, -1 + 2 / 3, 1]])
+        npt.assert_allclose(
+            spectral.logical_coords(
+                [[0, 0.5, 1], [0.5, 1.5, 3.5], [-1, 0.5, 2]],
+                bounds=[(0, 1), (0.5, 3.5), (-1, 2)]),
+            [[-1, 0, 1], [-1, -1 + 2 / 3, 1], [-1, 0, 1]])
+
+    def test_inertial_coords(self):
+        npt.assert_allclose(
+            spectral.inertial_coords([[-1, 0, 1]], bounds=[(0, 1)]),
+            [[0, 0.5, 1]])
+        npt.assert_allclose(
+            spectral.inertial_coords([[-1, 0, 1], [-1, -1 + 2 / 3, 1]],
+                                     bounds=[(0, 1), (0.5, 3.5)]),
+            [[0, 0.5, 1], [0.5, 1.5, 3.5]])
+        npt.assert_allclose(
+            spectral.inertial_coords(
+                [[-1, 0, 1], [-1, -1 + 2 / 3, 1], [-1, 0, 1]],
+                bounds=[(0, 1), (0.5, 3.5), (-1, 2)]),
+            [[0, 0.5, 1], [0.5, 1.5, 3.5], [-1, 0.5, 2]])

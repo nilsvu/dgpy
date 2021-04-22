@@ -61,22 +61,47 @@ def lg_weights(N):
     return leggauss(N)[1]
 
 
-def logical_coords(x, extents):
-    x = np.asarray(x)
+def logical_coords(x, bounds):
+    """Maps inertial to logical coordinates for rectilinear domains
+
+    Args:
+      x: Inertial coordinates. Must be a d-dimensional array, where d is the
+        dimension of the domain.
+      bounds: The (lower, upper) bounds of the element in inertial coordinates,
+        in every dimension. For example: [(0, 1), (0.5, 3.5)]
+    """
+    x = np.asarray(x, dtype=np.float)
+    dim = len(x)
+    bounds = np.asarray(bounds, dtype=np.float)
+    assert bounds.shape == (dim, 2), (
+        f"The 'bounds' must have shape ({dim}, 2) in {dim} dimensions, but "
+        f"the shape is: {bounds.shape}")
     rs = np.ones(x.ndim, int)
     rs[0] = -1
-    a = np.squeeze(np.diff(extents)) / 2
-    b = np.sum(extents, axis=-1) / 2
+    a = np.squeeze(np.diff(bounds)) / 2
+    b = np.sum(bounds, axis=-1) / 2
     return (x - b.reshape(rs)) / a.reshape(rs)
 
 
-def inertial_coords(xi, extents):
-    xi = np.asarray(xi)
-    rs = np.ones(xi.ndim, int)
-    rs[0] = -1
-    a = np.squeeze(np.diff(extents)) / 2
-    b = np.sum(extents, axis=-1) / 2
-    return a.reshape(rs) * xi + b.reshape(rs)
+def inertial_coords(xi, bounds):
+    """Maps logical to inertial coordinates for rectilinear domains
+
+    Args:
+      xi: Logical coordinates. Must be a d-dimensional array, where d is the
+        dimension of the domain.
+      bounds: The (lower, upper) bounds of the element in inertial coordinates,
+        in every dimension. For example: [(0, 1), (0.5, 3.5)]
+    """
+    xi = np.asarray(xi, dtype=np.float)
+    dim = len(xi)
+    bounds = np.asarray(bounds, dtype=np.float)
+    assert bounds.shape == (dim, 2), (
+        f"The 'bounds' must have shape ({dim}, 2) in {dim} dimensions, but "
+        f"the shape is: {bounds.shape}")
+    x = np.zeros(xi.shape)
+    for d in range(dim):
+        x[d] = xi[d] * (bounds[d][1] - bounds[d][0]) / 2 + (bounds[d][1] + bounds[d][0]) / 2
+    return x
 
 
 # Functions copied from Harald Pfeiffer's lecture notes
