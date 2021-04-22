@@ -8,28 +8,18 @@ from .interpolate import lagrange_interpolate
 precomputed_massmats = {}
 
 
-def mass_matrix(e, d):
+def mass_matrix(e, d, mass_lumping):
     global precomputed_massmats
+    if mass_lumping not in precomputed_massmats:
+        precomputed_massmats[mass_lumping] = {}
     p = e.num_points[d]
-    if not (p in precomputed_massmats):
-        precomputed_massmats[p] = logical_mass_matrix(e.collocation_points[d])
+    if p not in precomputed_massmats[mass_lumping]:
+        precomputed_massmats[mass_lumping][p] = diag_logical_mass_matrix(
+            e.quadrature_weights[d]) if mass_lumping else logical_mass_matrix(
+                e.collocation_points[d])
     # This way of handling the jacobian only works because it is constant for
     # our rectangular mesh.
-    return e.inertial_to_logical_jacobian[d, d] * precomputed_massmats[p]
-
-
-precomputed_diag_massmats = {}
-
-
-def diag_mass_matrix(e, d):
-    global precomputed_diag_massmats
-    p = e.num_points[d]
-    if not (p in precomputed_diag_massmats):
-        precomputed_diag_massmats[p] = diag_logical_mass_matrix(
-            e.quadrature_weights[d])
-    # This way of handling the jacobian only works because it is constant for
-    # our rectangular mesh.
-    return e.inertial_to_logical_jacobian[d, d] * precomputed_diag_massmats[p]
+    return e.inertial_to_logical_jacobian[d, d] * precomputed_massmats[mass_lumping][p]
 
 
 precomputed_diffmats = {}
@@ -72,6 +62,24 @@ def interpolate_from(u, e, from_points):
     return Iu
 
 
+def compute_mass(u, e, mass_lumping):
+    Mu = u
+    for d in range(e.dim):
+        M = mass_matrix(e, d, mass_lumping)
+        axis = (u.ndim - e.dim) + d
+        Mu = apply_matrix(M, Mu, axis)
+    return Mu
+
+
+def compute_inverse_mass(u, e, mass_lumping):
+    Mu = u
+    for d in range(e.dim):
+        M = np.linalg.inv(mass_matrix(e, d, mass_lumping))
+        axis = (u.ndim - e.dim) + d
+        Mu = apply_matrix(M, Mu, axis)
+    return Mu
+
+
 def compute_deriv(u, e):
     """
     Compute the partial derivatives of the field data `u` on the element `e`.
@@ -96,7 +104,7 @@ def compute_deriv(u, e):
     return grad_u
 
 
-def compute_div(v, e):
+def compute_div(v, e, scheme, massive, mass_lumping):
     """
     Compute the divergence of the field data `u` on the element `e`.
 
@@ -113,29 +121,19 @@ def compute_div(v, e):
         The divergence of `u` on `e`.
     """
     div_v = np.zeros(v.shape[1:])
+    if scheme == 'weak':
+        v = compute_mass(v, e, mass_lumping)
     for d in range(e.dim):
         D = differentiation_matrix(e, d)
+        if scheme == 'weak':
+            D = -D.T
         axis = d + (v.ndim - 1 - e.dim)
         div_v += apply_matrix(D, v[d], axis)
+    if scheme == 'weak' and not massive:
+        div_v = compute_inverse_mass(div_v, e, mass_lumping)
+    elif scheme == 'strong' and massive:
+        div_v = compute_mass(div_v, e, mass_lumping)
     return div_v
-
-
-def compute_mass(u, e, mass_lumping):
-    Mu = u
-    for d in range(e.dim):
-        M = (diag_mass_matrix if mass_lumping else mass_matrix)(e, d)
-        axis = (u.ndim - e.dim) + d
-        Mu = apply_matrix(M, Mu, axis)
-    return Mu
-
-
-def compute_inverse_mass(u, e, mass_lumping):
-    Mu = u
-    for d in range(e.dim):
-        M = np.linalg.inv((diag_mass_matrix if mass_lumping else mass_matrix)(e, d))
-        axis = (u.ndim - e.dim) + d
-        Mu = apply_matrix(M, Mu, axis)
-    return Mu
 
 
 def quadrature(space, u, valence):
@@ -172,47 +170,59 @@ def basis(e, face=None):
     return phi
 
 
-def lift_flux(u, face, scheme, mass_lumping):
+def lift_flux(u, face, scheme, massive, mass_lumping):
     valence = u.ndim - face.dim
     if scheme == 'quadrature':
-        return quadrature(
+        result = quadrature(
             face,
             u.reshape(*u.shape, *((face.dim + 1) *
                                   [1])) * basis(face.element, face),
             valence
         )
+        if massive:
+            return result
+        else:
+            return compute_inverse_mass(result, face.element, mass_lumping)
     elif scheme == 'mass_matrix':
         result_slice = u
         for d in range(face.dim):
-            M_on_face = (diag_mass_matrix if mass_lumping else mass_matrix)(face, d)
+            M_on_face = mass_matrix(face, d, mass_lumping)
             result_slice = apply_matrix(
                 M_on_face, result_slice, d + valence)
         result = np.zeros(valence * (face.element.dim,) + tuple(face.element.num_points))
         slc = (slice(None),) * (valence + face.dimension) + (face.slice_index(),)
         result[slc] = result_slice
-        return result
+        if massive:
+            return result
+        else:
+            return compute_inverse_mass(result, face.element, mass_lumping)
     else:
         raise NotImplementedError
 
-def lift_deriv_flux(v, face, scheme):
+
+def lift_deriv_flux(v, face, scheme, massive, mass_lumping):
     valence = v.ndim - 1 - face.dim
     if scheme == 'quadrature':
         v_broadcast_over_basis = v.reshape(*v.shape, *((face.dim + 1) * [1]))
         integrand = np.einsum('j...,j...', v_broadcast_over_basis, basis_deriv(face.element, face))
-        return quadrature(
-            face,
-            integrand,
-            valence
-        )
+        result = quadrature(face, integrand, valence)
+        if massive:
+            return result
+        else:
+            return compute_inverse_mass(result, face.element, mass_lumping)
     elif scheme == 'mass_matrix':
-        v_lifted = lift_flux(v, face, scheme)
+        v_lifted = lift_flux(v, face, scheme, False, mass_lumping)
         result = np.zeros(v_lifted.shape[1:])
         for d in range(face.element.dim):
             result += apply_matrix(differentiation_matrix(face.element, d).T, v_lifted[d], d + valence)
-        return result
+        if massive:
+            return result
+        else:
+            return compute_inverse_mass(result, face.element, mass_lumping)
     else:
         raise NotImplementedError
-     
+
+
 # TODO: move to IP scheme
 def penalty(face, penalty_parameter):
     num_points = face.element.num_points[face.dimension]
