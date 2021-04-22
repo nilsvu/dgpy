@@ -1,5 +1,5 @@
+import numpy as np
 from .spectral import inertial_coords
-
 from scipy.interpolate import lagrange as lagrange_interpolate
 
 
