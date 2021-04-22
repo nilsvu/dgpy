@@ -89,7 +89,10 @@ def plot_dg(field, domain, show_element_boundaries=True, show_collocation_points
             fig = plt.gcf()
             ax = fig.add_subplot(111, projection='3d')
         for e in domain.elements:
-            ax.plot_surface(*e.inertial_coords, getattr(e, field))
+            field_data = getattr(e, field)
+            if field_slice is not None:
+                field_data = field_data[field_slice]
+            ax.plot_surface(*e.inertial_coords, field_data)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_zlabel(field)
