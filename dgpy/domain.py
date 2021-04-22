@@ -190,6 +190,23 @@ class Element:
                 field_on_slice = None
             setattr(face, field, field_on_slice)
 
+    def get_field_in(self, field, sub_extents):
+        xis, field_values = [], []
+        for point in itertools.product(*[range(self.num_points[d]) for d in range(self.dim)]):
+            x = self.inertial_coords
+            u = getattr(self, field)
+            valence = u.ndim - self.dim
+            for d in range(self.dim):
+                x = np.take(x, point[d], axis=1)
+                u = np.take(u, point[d], axis=valence)
+            choose_point = True
+            for d in range(self.dim):
+                if x[d] < sub_extents[d][0] or x[d] > sub_extents[d][1]:
+                    choose_point = False
+            if choose_point:
+                xis.append(logical_coords(x, sub_extents))
+                field_values.append(u)
+        return xis, field_values
 
 
 class Domain:
@@ -336,6 +353,18 @@ class Domain:
         if e_center.id[0] != self.num_elements[0] - 1:
             extended_xi += list((e_center.logical_coords[0] + 2)[:overlap])
         return [np.asarray(extended_xi)]
+
+    def get_field_in(self, field, sub_extents):
+        logical_coords, field_values = [], []
+        for e in self.elements:
+            xis, us = e.get_field_in(field, sub_extents)
+            logical_coords += xis
+            field_values += us
+        return logical_coords, field_values
+
+    def elements_in(self, extents):
+        extents = np.asarray(extents)
+        return (e for e in self.elements if np.all(np.logical_and(np.asarray(e.extents)[:,0] >= extents[:,0], np.asarray(e.extents)[:,1] <= extents[:,1])))
 
     def set_data(self,
                  data,
