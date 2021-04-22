@@ -1,6 +1,7 @@
 import unittest
 
 from dgpy import spectral
+import numpy as np
 import numpy.testing as npt
 from numpy import sqrt
 
@@ -56,3 +57,16 @@ class TestSpectral(unittest.TestCase):
                 [[-1, 0, 1], [-1, -1 + 2 / 3, 1], [-1, 0, 1]],
                 bounds=[(0, 1), (0.5, 3.5), (-1, 2)]),
             [[0, 0.5, 1], [0.5, 1.5, 3.5], [-1, 0.5, 2]])
+
+    def test_logical_differentiation_matrix(self):
+        xi = spectral.lgl_points(3)
+        D = spectral.logical_differentiation_matrix(xi)
+        npt.assert_allclose(
+            D, [[-1.5, 2., -0.5], [-0.5, 0., 0.5], [0.5, -2., 1.5]])
+
+    def test_logical_mass_matrix(self):
+        xi = spectral.lgl_points(3)
+        M = spectral.logical_mass_matrix(xi)
+        npt.assert_allclose(
+            M,
+            np.array([[4., 2., -1.], [2., 16., 2.], [-1., 2., 4.]]) / 15.)

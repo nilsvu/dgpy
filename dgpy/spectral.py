@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.polynomial.legendre import leggauss
-import scipy
+import scipy.special
 
 
 def leggausslobatto(N):
@@ -133,6 +133,11 @@ def vandermonde_matrix(r):
 
 
 def logical_differentiation_matrix(r):
+    """Returns the differentiation matrix for the collocation points
+
+    Args:
+      r: Collocation points
+    """
     V = vandermonde_matrix(r)
     Vinv = np.linalg.inv(V)
 
@@ -173,6 +178,11 @@ def logical_differentiation_matrix(r):
 
 
 def logical_mass_matrix(r):
+    """Returns the mass matrix for the collocation points.
+
+    Args:
+      r: Collocation points
+    """
     V = vandermonde_matrix(r)
     return np.linalg.inv(V @ V.T)
 
