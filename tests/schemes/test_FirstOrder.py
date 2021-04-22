@@ -9,6 +9,7 @@ from dgpy.systems import Poisson
 from dgpy.boundary_conditions.Zero import Zero
 from dgpy.boundary_conditions.AnalyticSolution import AnalyticSolution
 from dgpy.solutions.Poisson.ProductOfSinusoids import ProductOfSinusoids
+from dgpy.utilities import build_matrix
 from scipy.sparse.linalg import gmres
 
 
@@ -202,3 +203,31 @@ class TestFirstOrderScheme(unittest.TestCase):
                             domain.get_data('u_compact'),
                             rtol=0.,
                             atol=1.e-9)
+
+    def test_spd(self):
+        """Tests the operator is symmetric positive-definite"""
+        domain = Domain(extents=[(0., 1.), (0., 2.)],
+                        num_elements=2,
+                        num_points=3)
+        boundary_conditions = 2 * [(
+            Zero(BoundaryCondition.DIRICHLET),
+            Zero(BoundaryCondition.NEUMANN),
+        )]
+        for scheme, mass_lumping in [('strong', True), ('weak-strong', True),
+                                     ('weak-strong', False)]:
+            with self.subTest(scheme=scheme, mass_lumping=mass_lumping):
+                A = DgOperator(domain=domain,
+                               system=Poisson,
+                               boundary_conditions=boundary_conditions,
+                               formulation='full',
+                               scheme=scheme,
+                               numerical_flux='ip',
+                               massive=True,
+                               mass_lumping=mass_lumping)
+                A_matrix = build_matrix(A)
+                assert np.allclose(
+                    A_matrix,
+                    A_matrix.T), ("Operator matrix should be symmetric")
+                l = np.sort(np.linalg.eigvals(A_matrix))
+                assert np.all(
+                    l > 0), ("Operator matrix should be positive-definite")
