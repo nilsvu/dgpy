@@ -8,13 +8,16 @@ with open("README.md", "r") as readme_file:
 setup(
     name='dgpy',
     version='0.1',
-    description="Infrastructure to solve elliptic partial differential equations with discontinous Galerkin schemes",
+    description=(
+        "Infrastructure to solve elliptic partial differential equations with "
+        "discontinuous Galerkin schemes"),
     author="Nils L. Fischer",
     author_email="hello@nilsleiffischer.de",
     url="https://github.com/nilsleiffischer/dgpy",
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=['dgpy'],
+    install_requires=['numpy', 'scipy', 'matplotlib'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
