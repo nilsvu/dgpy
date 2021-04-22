@@ -2,10 +2,14 @@ import unittest
 
 import numpy as np
 import numpy.testing as npt
+from numpy import pi
 from dgpy.domain import Domain, BoundaryCondition
-from dgpy.boundary_conditions.Zero import Zero
 from dgpy.schemes.FirstOrder import DgOperator
 from dgpy.systems import Poisson
+from dgpy.boundary_conditions.Zero import Zero
+from dgpy.boundary_conditions.AnalyticSolution import AnalyticSolution
+from dgpy.solutions.Poisson.ProductOfSinusoids import ProductOfSinusoids
+from scipy.sparse.linalg import gmres
 
 
 class TestFirstOrderScheme(unittest.TestCase):
@@ -168,3 +172,42 @@ class TestFirstOrderScheme(unittest.TestCase):
                 390.19201603025016, 410.25585855100763, 53.690124372228034,
                 82.23683297149915, 53.091014251828675, 117.36921898587735
             ]).reshape((2, 3, 4), order='F'))
+
+    def test_compact_equivalence(self):
+        """Tests the compact operator has the same solution as the full"""
+        domain = Domain(extents=2 * [(0., 1.)], num_elements=2, num_points=4)
+        solution = ProductOfSinusoids(wave_numbers=2 * [pi])
+        domain.set_data(solution.source, 'source')
+        boundary_conditions = 2 * [(
+            AnalyticSolution(BoundaryCondition.DIRICHLET,
+                             solution=solution.field),
+            AnalyticSolution(BoundaryCondition.DIRICHLET,
+                             solution=solution.field),
+        )]
+        A_kwargs = dict(domain=domain,
+                        system=Poisson,
+                        boundary_conditions=boundary_conditions,
+                        scheme='strong',
+                        numerical_flux='ip',
+                        massive=True,
+                        mass_lumping=False,
+                        penalty_parameter=1.5,
+                        lifting_scheme='mass_matrix',
+                        storage_order='F')
+        gmres_kwargs = dict(tol=1.e-10, atol=1.e-14, maxiter=100, restart=100)
+        A_full = DgOperator(formulation='flux-full', **A_kwargs)
+        b_full = A_full.compute_source('source')
+        sol_full, info = gmres(A_full, b_full, **gmres_kwargs)
+        assert info == 0, "Linear solve failed"
+        domain.set_data(sol_full, ['v_full', 'u_full'],
+                        fields_valence=(1, 0),
+                        storage_order='F')
+        A_compact = DgOperator(formulation='flux', **A_kwargs)
+        b_compact = A_compact.compute_source('source')
+        sol_compact, info = gmres(A_compact, b_compact, **gmres_kwargs)
+        assert info == 0, "Linear solve failed"
+        domain.set_data(sol_compact, 'u_compact', storage_order='F')
+        npt.assert_allclose(domain.get_data('u_full'),
+                            domain.get_data('u_compact'),
+                            rtol=0.,
+                            atol=1.e-9)
