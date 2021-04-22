@@ -12,7 +12,7 @@ import scipy.integrate
 class TestOperators(unittest.TestCase):
 
     def setUp(self):
-        self.eps = np.finfo(np.float64).eps
+        self.eps = np.finfo(float).eps
 
     def test_mass_matrix(self):
         """Tests that the mass matrix is M_ij = integrate(l_i * l_j, -1, 1)"""

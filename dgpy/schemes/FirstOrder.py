@@ -233,7 +233,7 @@ class DgOperator(LinearOperator):
             field_valences = system.field_valences
         N = domain.get_total_num_points() * np.sum(domain.dim**
                                                    np.array(field_valences))
-        super().__init__(shape=(N, N), dtype=np.float64)
+        super().__init__(shape=(N, N), dtype=float)
 
     def _matvec(self, x):
         return apply_first_order_operator(

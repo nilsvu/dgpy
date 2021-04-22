@@ -71,9 +71,9 @@ def logical_coords(x, bounds):
       bounds: The (lower, upper) bounds of the element in inertial coordinates,
         in every dimension. For example: [(0, 1), (0.5, 3.5)]
     """
-    x = np.asarray(x, dtype=np.float)
+    x = np.asarray(x, dtype=float)
     dim = len(x)
-    bounds = np.asarray(bounds, dtype=np.float)
+    bounds = np.asarray(bounds, dtype=float)
     assert bounds.shape == (dim, 2), (
         f"The 'bounds' must have shape ({dim}, 2) in {dim} dimensions, but "
         f"the shape is: {bounds.shape}")
@@ -94,9 +94,9 @@ def inertial_coords(xi, bounds):
       bounds: The (lower, upper) bounds of the element in inertial coordinates,
         in every dimension. For example: [(0, 1), (0.5, 3.5)]
     """
-    xi = np.asarray(xi, dtype=np.float)
+    xi = np.asarray(xi, dtype=float)
     dim = len(xi)
-    bounds = np.asarray(bounds, dtype=np.float)
+    bounds = np.asarray(bounds, dtype=float)
     assert bounds.shape == (dim, 2), (
         f"The 'bounds' must have shape ({dim}, 2) in {dim} dimensions, but "
         f"the shape is: {bounds.shape}")

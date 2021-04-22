@@ -253,7 +253,7 @@ class Operator(LinearOperator):
         self.domain = domain
         self.storage_order = storage_order
         N = domain.get_total_num_points()
-        super().__init__(shape=(N, N), dtype=np.float64)
+        super().__init__(shape=(N, N), dtype=float)
 
     def _matvec(self, x):
         self.domain.set_data(x, 'u', storage_order=self.storage_order)
