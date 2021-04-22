@@ -341,7 +341,7 @@ class Domain:
                  data,
                  fields,
                  fields_valence=None,
-                 storage_order='C',
+                 storage_order='F',
                  **kwargs):
         """
         Distributes the `data` to all elements.
@@ -396,7 +396,7 @@ class Domain:
                     k += num_points
                 setattr(e, field, element_data)
 
-    def get_data(self, fields, storage_order='C'):
+    def get_data(self, fields, storage_order='F'):
         """Retrieve the datasets of the specified fields as a flat array."""
         if isinstance(fields, str):
             fields = [fields]
