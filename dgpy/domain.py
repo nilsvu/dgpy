@@ -23,10 +23,10 @@ class Face:
         self.dim = element.dim - 1
         self.extents = np.delete(element.extents, dimension, axis=0)
         self.num_points = np.delete(element.num_points, dimension)
-        self.collocation_points = np.delete(
-            element.collocation_points, dimension, axis=0)
-        self.quadrature_weights = np.delete(
-            element.quadrature_weights, dimension, axis=0)
+        self.collocation_points = (element.collocation_points[:dimension] +
+                                   element.collocation_points[dimension + 1:])
+        self.quadrature_weights = (element.quadrature_weights[:dimension] +
+                                   element.quadrature_weights[dimension + 1:])
 
         collocation_points_in_vol = []
         for d in range(element.dim):
