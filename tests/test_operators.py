@@ -20,7 +20,7 @@ class TestOperators(unittest.TestCase):
         domain = dg_domain.Domain(
             extents=[(-1, 1)], num_elements=1, num_points=3)
         e = list(domain.elements)[0]
-        M = dg_operators.mass_matrix(e, 0)
+        M = dg_operators.mass_matrix(e, 0, mass_lumping=False)
 
         def m(x, i, j):
             return lagrange_polynomial(e.collocation_points[0], i)(x) * lagrange_polynomial(e.collocation_points[0], j)(x)
