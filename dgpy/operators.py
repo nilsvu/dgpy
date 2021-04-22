@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+from scipy.sparse.linalg import LinearOperator
 
 from .spectral import logical_mass_matrix, diag_logical_mass_matrix, logical_differentiation_matrix
 from .interpolate import lagrange_interpolate
@@ -244,3 +245,17 @@ def lift_internal_penalty(u, face, penalty_parameter):
         ), (face.dim + 1, *face.num_points, *((face.dim + 1) * [1]))), basis_deriv(face.element, face)) - sigma * basis(face.element, face)),
         u.ndim - face.dim
     )
+
+
+class Operator(LinearOperator):
+    def __init__(self, operator, domain, storage_order='F'):
+        self.operator = operator
+        self.domain = domain
+        self.storage_order = storage_order
+        N = domain.get_total_num_points()
+        super().__init__(shape=(N, N), dtype=np.float64)
+
+    def _matvec(self, x):
+        self.domain.set_data(x, 'u', storage_order=self.storage_order)
+        self.domain.apply(self.operator, 'u', 'Ou')
+        return self.domain.get_data('Ou', storage_order=self.storage_order)
