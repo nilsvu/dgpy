@@ -186,22 +186,13 @@ class TestFirstOrderScheme(unittest.TestCase):
         )]
         A_kwargs = dict(domain=domain,
                         system=Poisson,
-                        boundary_conditions=boundary_conditions,
-                        scheme='strong',
-                        numerical_flux='ip',
-                        massive=True,
-                        mass_lumping=False,
-                        penalty_parameter=1.5,
-                        lifting_scheme='mass_matrix',
-                        storage_order='F')
+                        boundary_conditions=boundary_conditions)
         gmres_kwargs = dict(tol=1.e-10, atol=1.e-14, maxiter=100, restart=100)
         A_full = DgOperator(formulation='flux-full', **A_kwargs)
         b_full = A_full.compute_source('source')
         sol_full, info = gmres(A_full, b_full, **gmres_kwargs)
         assert info == 0, "Linear solve failed"
-        domain.set_data(sol_full, ['v_full', 'u_full'],
-                        fields_valence=(1, 0),
-                        storage_order='F')
+        domain.set_data(sol_full, ['v_full', 'u_full'], fields_valence=(1, 0))
         A_compact = DgOperator(formulation='flux', **A_kwargs)
         b_compact = A_compact.compute_source('source')
         sol_compact, info = gmres(A_compact, b_compact, **gmres_kwargs)
