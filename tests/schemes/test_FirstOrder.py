@@ -9,8 +9,9 @@ from dgpy.systems import Poisson
 from dgpy.boundary_conditions.Zero import Zero
 from dgpy.boundary_conditions.AnalyticSolution import AnalyticSolution
 from dgpy.solutions.Poisson.ProductOfSinusoids import ProductOfSinusoids
-from dgpy.utilities import build_matrix
+from dgpy.utilities import build_matrix, l2_error
 from scipy.sparse.linalg import gmres
+import itertools
 
 
 class TestFirstOrderScheme(unittest.TestCase):
@@ -174,6 +175,43 @@ class TestFirstOrderScheme(unittest.TestCase):
                 82.23683297149915, 53.091014251828675, 117.36921898587735
             ]).reshape((2, 3, 4), order='F'))
 
+    def test_solution(self):
+        domain = Domain(extents=2 * [(-0.5, 1.)], num_elements=2, num_points=4)
+        solution = ProductOfSinusoids(wave_numbers=2 * [pi])
+        domain.set_data(solution.source, 'source')
+        domain.set_data(solution.field, 'u_analytic')
+        boundary_conditions = 2 * [(
+            AnalyticSolution(BoundaryCondition.DIRICHLET,
+                             solution=solution.field),
+            AnalyticSolution(BoundaryCondition.NEUMANN,
+                             solution=solution.auxiliary_field),
+        )]
+        for formulation, scheme, numerical_flux in itertools.product(
+            ['flux', 'flux-full'], ['strong', 'strong-weak'], ['ip', 'llf']):
+            with self.subTest(formulation=formulation,
+                              scheme=scheme,
+                              numerical_flux=numerical_flux):
+                A = DgOperator(domain=domain,
+                               system=Poisson,
+                               boundary_conditions=boundary_conditions,
+                               formulation=formulation,
+                               scheme=scheme,
+                               numerical_flux=numerical_flux)
+                b = A.compute_source('source')
+                sol, info = gmres(A,
+                                  b,
+                                  tol=1.e-8,
+                                  atol=1.e-8,
+                                  maxiter=A.shape[0],
+                                  restart=A.shape[0])
+                assert info == 0, "Linear solve failed"
+                if formulation == 'flux-full':
+                    domain.set_data(sol, ['v', 'u'], fields_valence=[1, 0])
+                else:
+                    domain.set_data(sol, 'u')
+                self.assertLessEqual(l2_error(domain, 'u', 'u_analytic'),
+                                     7.e-3)
+
     def test_compact_equivalence(self):
         """Tests the compact operator has the same solution as the full"""
         domain = Domain(extents=2 * [(0., 1.)], num_elements=2, num_points=4)
@@ -213,8 +251,8 @@ class TestFirstOrderScheme(unittest.TestCase):
             Zero(BoundaryCondition.DIRICHLET),
             Zero(BoundaryCondition.NEUMANN),
         )]
-        for scheme, mass_lumping in [('strong', True), ('weak-strong', True),
-                                     ('weak-strong', False)]:
+        for scheme, mass_lumping in [('strong', True), ('strong-weak', True),
+                                     ('strong-weak', False)]:
             with self.subTest(scheme=scheme, mass_lumping=mass_lumping):
                 A = DgOperator(domain=domain,
                                system=Poisson,

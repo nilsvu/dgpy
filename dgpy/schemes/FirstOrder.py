@@ -30,11 +30,10 @@ def apply_first_order_operator(x,
     if formulation == 'primal':
         raise NotImplementedError(
             "The primal formulation is not yet correctly implemented")
-    scheme_u = 'strong' if scheme in ['strong', 'strong-weak'] else 'weak'
-    scheme_v = 'strong' if scheme in ['strong', 'weak-strong'] else 'weak'
+    scheme_v = 'strong' if scheme in ['strong', 'strong-weak'] else 'weak'
+    scheme_u = 'strong' if scheme in ['strong', 'weak-strong'] else 'weak'
     assert not (scheme_v == 'weak' and numerical_flux == 'ip'), (
-        "Use the strong form for the auxiliary equation with the "
-        "IP numerical flux.")
+        "Use the 'strong' or 'strong-weak' form with the IP numerical flux.")
     # Compute the auxiliary fields
     domain.apply(system.auxiliary_fluxes, 'u', 'F_v',
                  domain.dim)  # Essentially u
@@ -60,23 +59,22 @@ def apply_first_order_operator(x,
         for face in element.get_interior_faces():
             face.nF_v = face.normal_dot(face.F_v)
         # For u:
-        if numerical_flux == 'ip': # TODO: Fix for LLF flux
-            # This is essentially F_u but without v's boundary corrections. We could
-            # also use F_u for the numerical flux (LLF not IP), but would have to
-            # add a second communication step after v's boundary corrections have
-            # been applied.
+        if numerical_flux == 'ip':
+            # This is essentially F_u(v) but without v's boundary corrections,
+            # so we can communicate it already at this point.
             element.slice_to_faces('v_numeric', 'interior')
             for face in element.get_interior_faces():
-                face.nF_u_divF_v = face.normal_dot(
+                face.nF_u = face.normal_dot(
                     system.primal_fluxes(face.v_numeric, element))
     # --- Communication end ---
-    # Boundary conditions for v
+    # Boundary conditions for auxiliary equation (Dirichlet-type)
     for element in domain.elements:
         element.slice_to_faces('u', 'exterior')
         for face in element.get_exterior_faces():
             bc = boundary_conditions[face.dimension][
                 (face.opposite_face.direction + 1) // 2]
-            bc = bc.nonlinear if use_nonlinear_boundary_conditions else bc.linear
+            bc = (bc.nonlinear
+                  if use_nonlinear_boundary_conditions else bc.linear)
             face.u_b = bc(face.u, np.zeros(face.u.shape), face)[0]
             face.nF_v = (2. * face.normal_dot(
                 system.auxiliary_fluxes(face.u_b, face, domain.dim)) +
@@ -86,6 +84,7 @@ def apply_first_order_operator(x,
     if formulation != 'primal':
         for element in domain.elements:
             for face in element.get_interior_faces():
+                # n.F_v^* = avg(n.F_v)
                 boundary_correction_v = 0.5 * (face.nF_v -
                                                face.opposite_face.nF_v)
                 if scheme_v == 'strong':
@@ -108,22 +107,25 @@ def apply_first_order_operator(x,
         if massive:
             element.S_u = compute_mass(element.S_u, element, mass_lumping)
         element.Au = element.S_u - element.divF_u
-    # Boundary conditions for primal equation
+    # The LLF flux needs an extra communication here because the n.F_u are
+    # needed for the flux.
+    if numerical_flux == 'llf':
+        for element in domain.elements:
+            element.slice_to_faces('F_u', 'interior')
+            for face in element.get_interior_faces():
+                face.nF_u = face.normal_dot(face.F_u)
+    # Boundary conditions for primal equation (Neumann-type)
     for element in domain.elements:
-        # The LLF flux needs an extra communication here because the nF_u are
-        # needed for the flux.
-        element.slice_to_faces('F_u', 'interior')
-        for face in element.get_interior_faces():
-            face.nF_u = face.normal_dot(face.F_u)
         for face in element.get_exterior_faces():
             bc = boundary_conditions[face.dimension][
                 (face.opposite_face.direction + 1) // 2]
-            bc = bc.nonlinear if use_nonlinear_boundary_conditions else bc.linear
-            face.nF_u_divF_v = np.copy(
-                bc(face.u, face.opposite_face.nF_u_divF_v,
+            bc = (bc.nonlinear
+                  if use_nonlinear_boundary_conditions else bc.linear)
+            face.nF_u = np.copy(
+                bc(face.u, face.opposite_face.nF_u,
                    face.opposite_face)[1])
-            face.nF_u_divF_v *= -2.
-            face.nF_u_divF_v += face.opposite_face.nF_u_divF_v
+            face.nF_u *= -2.
+            face.nF_u += face.opposite_face.nF_u
     # Add boundary correction to primal equation
     for element in domain.elements:
         for face in element.get_interior_faces():
@@ -141,19 +143,18 @@ def apply_first_order_operator(x,
                     massive=massive,
                     mass_lumping=mass_lumping)
                 element.Au += lifted_boundary_correction_v
+            # n.F_u^* = avg(n.F_u) - sigma * jump(n.F_v)
             sigma = {
                 'ip': penalty(face, penalty_parameter),
                 'llf': penalty_parameter
             }[numerical_flux]
-            boundary_correction_Au = 0.5 * (face.nF_u_divF_v -
-                                            face.opposite_face.nF_u_divF_v)
+            boundary_correction_Au = 0.5 * (face.nF_u -
+                                            face.opposite_face.nF_u)
             if scheme_u == 'strong':
-                # Using the nF_u_divF_v here for the IP flux seems wrong but
-                # seems to work just as well as using nF_u, which we have to
-                # compute just for this. Q: Does it?
-                boundary_correction_Au -= face.nF_u_divF_v
-            boundary_correction_Au -= (
-                sigma * face.normal_dot(face.nF_v + face.opposite_face.nF_v))
+                boundary_correction_Au -= face.nF_u
+            boundary_correction_Au -= (sigma * face.normal_dot(
+                system.primal_fluxes(face.nF_v + face.opposite_face.nF_v,
+                                     face)))
             element.Au -= lift_flux(boundary_correction_Au,
                                     face,
                                     scheme=lifting_scheme,
