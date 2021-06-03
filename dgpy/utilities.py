@@ -26,6 +26,12 @@ def l2_error(domain, field, analytic_field, method='pointwise'):
         raise NotImplementedError
 
 
+def linf_error(domain, field, analytic_field):
+    return domain.reduce(
+        lambda x, y: max(x, y), lambda e: np.max(
+            np.abs(getattr(e, field) - getattr(e, analytic_field))), 0)
+
+
 def symmetrize(u, axes=(0, 1)):
     assert len(axes) is 2
     return (u + np.moveaxis(u, axes, (axes[1], axes[0]))) / 2
