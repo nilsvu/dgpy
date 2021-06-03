@@ -65,7 +65,7 @@ def apply_first_order_operator(x,
             element.slice_to_faces('v_numeric', 'interior')
             for face in element.get_interior_faces():
                 face.nF_u = face.normal_dot(
-                    system.primal_fluxes(face.v_numeric, element))
+                    system.primal_fluxes(face.v_numeric, face))
     # --- Communication end ---
     # Boundary conditions for auxiliary equation (Dirichlet-type)
     for element in domain.elements:
