@@ -1,5 +1,7 @@
 import unittest
 
+from scipy.integrate.quadpack import quad
+
 import dgpy.domain as dg_domain
 
 import numpy as np
@@ -58,6 +60,27 @@ class TestOperators(unittest.TestCase):
         domain.set_data(domain.get_data(['u', 'v']), ['u3', 'v3'], [0, 1])
         npt.assert_equal(domain.get_data('u3'), domain.get_data('u'))
         npt.assert_equal(domain.get_data('v3'), domain.get_data('v'))
+
+    def test_slice_to_faces_1d(self):
+        def poly(coords):
+            x = coords[0]
+            return x**2 + 2. * x + 3.
+
+        for quadrature in [
+                dg_domain.Quadrature.GAUSS_LOBATTO, dg_domain.Quadrature.GAUSS
+        ]:
+            with self.subTest(quadrature=quadrature):
+                domain = dg_domain.Domain(extents=[(0, 2)],
+                                          num_elements=2,
+                                          num_points=3,
+                                          quadrature=quadrature)
+                domain.set_data(poly, 'u')
+                e = list(domain.elements)[0]
+                e.slice_to_faces('u')
+                face_left = e.indexed_faces[(0, -1, False)]
+                npt.assert_allclose(face_left.u, poly([0.]))
+                face_right = e.indexed_faces[(0, 1, False)]
+                npt.assert_allclose(face_right.u, poly([1.]))
 
 
 if __name__ == '__main__':

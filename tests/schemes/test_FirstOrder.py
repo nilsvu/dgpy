@@ -1,9 +1,10 @@
+from dgpy.operators import quadrature
 import unittest
 
 import numpy as np
 import numpy.testing as npt
 from numpy import pi
-from dgpy.domain import Domain, BoundaryCondition
+from dgpy.domain import Domain, BoundaryCondition, Quadrature
 from dgpy.schemes.FirstOrder import DgOperator
 from dgpy.systems import Poisson
 from dgpy.boundary_conditions.Zero import Zero
@@ -16,7 +17,10 @@ import itertools
 
 class TestFirstOrderScheme(unittest.TestCase):
     def test_regression_1d(self):
-        domain = Domain(extents=[(-0.5, 1.5)], num_elements=4, num_points=4)
+        domain = Domain(extents=[(-0.5, 1.5)],
+                        num_elements=4,
+                        num_points=4,
+                        quadrature=Quadrature.GAUSS_LOBATTO)
         boundary_conditions = [(
             Zero(BoundaryCondition.DIRICHLET),
             Zero(BoundaryCondition.NEUMANN),
@@ -41,12 +45,12 @@ class TestFirstOrderScheme(unittest.TestCase):
             0.6848297385848633
         ])
         domain.indexed_elements[(2, )].u = np.array([
-            0.7194689697855631, 0.42310646012446096, 0.9807641983846155,
-            0.6848297385848633
-        ])
-        domain.indexed_elements[(3, )].u = np.array([
             0.48093190148436094, 0.3921175181941505, 0.3431780161508694,
             0.7290497073840416
+        ])
+        domain.indexed_elements[(3, )].u = np.array([
+            0.4385722446796244, 0.05967789660956835, 0.3980442553304314,
+            0.7379954057320357
         ])
         u = domain.get_data('u', storage_order='F')
         Au = A @ u

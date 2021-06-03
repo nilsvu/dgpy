@@ -11,16 +11,15 @@ precomputed_massmats = {}
 
 def mass_matrix(e, d, mass_lumping):
     global precomputed_massmats
-    if mass_lumping not in precomputed_massmats:
-        precomputed_massmats[mass_lumping] = {}
     p = e.num_points[d]
-    if p not in precomputed_massmats[mass_lumping]:
-        precomputed_massmats[mass_lumping][p] = diag_logical_mass_matrix(
+    cache_id = (p, mass_lumping, e.quadrature)
+    if cache_id not in precomputed_massmats:
+        precomputed_massmats[cache_id] = diag_logical_mass_matrix(
             e.quadrature_weights[d]) if mass_lumping else logical_mass_matrix(
                 e.collocation_points[d])
     # This way of handling the jacobian only works because it is constant for
     # our rectangular mesh.
-    return e.inertial_to_logical_jacobian[d, d] * precomputed_massmats[mass_lumping][p]
+    return e.inertial_to_logical_jacobian[d, d] * precomputed_massmats[cache_id]
 
 
 precomputed_diffmats = {}
@@ -29,14 +28,18 @@ precomputed_diffmats = {}
 def differentiation_matrix(e, d):
     global precomputed_diffmats
     p = e.num_points[d]
-    if not (p in precomputed_diffmats):
-        precomputed_diffmats[p] = logical_differentiation_matrix(
+    cache_id = (p, e.quadrature)
+    if cache_id not in precomputed_diffmats:
+        precomputed_diffmats[cache_id] = logical_differentiation_matrix(
             e.collocation_points[d])
-    return precomputed_diffmats[p] / e.inertial_to_logical_jacobian[d, d]
+    return precomputed_diffmats[cache_id] / e.inertial_to_logical_jacobian[d, d]
 
 
 def interpolation_matrix(from_points, to_points):
-    return np.array([lagrange_interpolate(from_points, unit_vector)(to_points) for unit_vector in np.eye(len(from_points))]).T
+    return np.array([
+        lagrange_interpolate(from_points, unit_vector)(to_points)
+        for unit_vector in np.eye(len(from_points))
+    ]).T
 
 
 def apply_matrix(O, u, d):
@@ -190,9 +193,12 @@ def lift_flux(u, face, scheme, massive, mass_lumping):
             M_on_face = mass_matrix(face, d, mass_lumping)
             result_slice = apply_matrix(
                 M_on_face, result_slice, d + valence)
-        result = np.zeros(valence * (face.element.dim,) + tuple(face.element.num_points))
-        slc = (slice(None),) * (valence + face.dimension) + (face.slice_index(),)
-        result[slc] = result_slice
+        # result = np.zeros(valence * (face.element.dim,) + tuple(face.element.num_points))
+        # slc = (slice(None),) * (valence + face.dimension) + (face.slice_index(),)
+        # result[slc] = result_slice
+        result_slice = np.expand_dims(result_slice, axis=valence + face.dimension)
+        I = interpolation_matrix(face.element.collocation_points[face.dimension], [face.direction])
+        result = apply_matrix(I.T, result_slice, valence + face.dimension)
         if massive:
             return result
         else:

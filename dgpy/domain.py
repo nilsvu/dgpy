@@ -3,7 +3,8 @@ import itertools
 import logging
 import functools
 
-from .spectral import lgl_points, lgl_weights, inertial_coords, logical_coords
+from .spectral import lg_points, lg_weights, lgl_points, lgl_weights, inertial_coords, logical_coords
+from .operators import interpolate_to
 from .plot import *
 
 
@@ -12,11 +13,23 @@ class BoundaryCondition:
     NEUMANN = "NEUMANN"
 
 
+class Quadrature:
+    GAUSS_LOBATTO = "GAUSS_LOBATTO"
+    GAUSS = "GAUSS"
+
+
 class Face:
-    def __init__(self, element, dimension, direction, is_exterior=False, boundary_condition=None):
+    def __init__(self,
+                 element,
+                 dimension,
+                 direction,
+                 quadrature,
+                 is_exterior=False,
+                 boundary_condition=None):
         self.element = element
         self.dimension = dimension
         self.direction = direction
+        self.quadrature = quadrature
         self.is_exterior = is_exterior
         self.boundary_condition = boundary_condition
 
@@ -125,18 +138,27 @@ class Face:
 class Element:
     logger = logging.getLogger('Element')
 
-    def __init__(self, extents, num_points):
+    def __init__(self, extents, num_points, quadrature):
         logger = logging.getLogger('Domain.Creation')
 
         extents = np.asarray(extents)
         self.dim = extents.shape[0]
 
-        logger.debug("Creating element with extents={}, num_points={}".format(
-            extents, num_points))
+        logger.debug(f"Creating element with extents={extents}, "
+                     f"num_points={num_points}, quadrature={quadrature}")
         self.extents = extents
         self.num_points = num_points
-        self.collocation_points = [lgl_points(N) for N in num_points]
-        self.quadrature_weights = [lgl_weights(N) for N in num_points]
+        self.quadrature = quadrature
+        self.collocation_points = [
+            (lgl_points(N)
+             if quadrature == Quadrature.GAUSS_LOBATTO else lg_points(N))
+            for N in num_points
+        ]
+        self.quadrature_weights = [
+            (lgl_weights(N)
+             if quadrature == Quadrature.GAUSS_LOBATTO else lg_weights(N))
+            for N in num_points
+        ]
 
         self.logical_coords = np.array(np.meshgrid(
             *self.collocation_points, indexing='ij'))
@@ -153,7 +175,10 @@ class Element:
         self.indexed_faces = {}
         for d in range(self.dim):
             for direction in (-1, 1):
-                face = Face(self, dimension=d, direction=direction)
+                face = Face(self,
+                            dimension=d,
+                            direction=direction,
+                            quadrature=quadrature)
                 self.indexed_faces[(d, direction, False)] = face
         self.faces = self.indexed_faces.values()
 
@@ -188,8 +213,18 @@ class Element:
         field_in_volume = getattr(self, field)
         for face in self.faces:
             if face.is_in(category):
-                field_on_slice = np.take(field_in_volume, face.slice_index(
-                ), axis=face.dimension + (field_in_volume.ndim - self.dim))
+                axis = face.dimension + (field_in_volume.ndim - self.dim)
+                if self.quadrature == Quadrature.GAUSS_LOBATTO:
+                    field_on_slice = np.take(field_in_volume,
+                                             face.slice_index(),
+                                             axis=axis)
+                else:
+                    target_points = self.dim * [None]
+                    target_points[face.dimension] = [-face.direction if face.is_exterior else face.direction]
+                    field_on_slice = np.take(interpolate_to(
+                        field_in_volume, self, target_points),
+                                             0,
+                                             axis=axis)
             else:
                 field_on_slice = None
             setattr(face, field, field_on_slice)
@@ -218,7 +253,14 @@ class Domain:
 
     logger = logging.getLogger('Domain')
 
-    def __init__(self, extents=None, num_elements=None, num_points=None, elements=None, element_ids=None, boundary_conditions=None):
+    def __init__(self,
+                 extents=None,
+                 num_elements=None,
+                 num_points=None,
+                 elements=None,
+                 element_ids=None,
+                 boundary_conditions=None,
+                 quadrature=Quadrature.GAUSS_LOBATTO):
         """
         Create a D-dimensional computational domain.
 
@@ -276,7 +318,8 @@ class Domain:
                     for d in range(self.dim)
                 ]
                 e = Element(extents=element_extents,
-                            num_points=self.num_points)
+                            num_points=self.num_points,
+                            quadrature=quadrature)
                 e.id = element_id
                 self.indexed_elements[e.id] = e
             self.elements = sorted(self.indexed_elements.values(), key=lambda e: e.id)
@@ -314,8 +357,13 @@ class Domain:
                             d, -direction, False)]
                     else:
                         ghost_face = Face(
-                            e, dimension=d, direction=-direction, is_exterior=True,
-                            boundary_condition=boundary_conditions[d][0 if direction == -1 else 1])
+                            e,
+                            dimension=d,
+                            direction=-direction,
+                            quadrature=quadrature,
+                            is_exterior=True,
+                            boundary_condition=boundary_conditions[d]
+                            [0 if direction == -1 else 1])
                         e.indexed_faces[(d, -direction, True)] = ghost_face
                         face.opposite_face = ghost_face
                         ghost_face.opposite_face = face
