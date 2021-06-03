@@ -101,11 +101,11 @@ def apply_first_order_operator(x,
                     element.v += lifted_boundary_correction_v
     # Compute the primal equation
     domain.apply(system.primal_fluxes, 'v', 'F_u')
-    domain.apply(compute_div, 'F_u', 'divF_u', scheme_u, massive, mass_lumping)
+    domain.apply(compute_div, 'F_u', 'divF_u', scheme_u, False, mass_lumping)
     domain.apply(system.primal_sources, 'v', 'S_u')
     for element in domain.elements:
-        if massive:
-            element.S_u = compute_mass(element.S_u, element, mass_lumping)
+        # if massive:
+        #     element.S_u = compute_mass(element.S_u, element, mass_lumping)
         element.Au = element.S_u - element.divF_u
     # The LLF flux needs an extra communication here because the n.F_u are
     # needed for the flux.
@@ -158,8 +158,13 @@ def apply_first_order_operator(x,
             element.Au -= lift_flux(boundary_correction_Au,
                                     face,
                                     scheme=lifting_scheme,
-                                    massive=massive,
+                                    massive=False,
                                     mass_lumping=mass_lumping)
+    if massive:
+        for element in domain.elements:
+            element.Au = compute_mass(element.Au,
+                                      element,
+                                      mass_lumping=mass_lumping)
     if formulation == 'flux-full':
         if massive:
             for element in domain.elements:
