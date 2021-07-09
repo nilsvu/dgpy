@@ -108,7 +108,7 @@ def compute_deriv(u, e):
     return grad_u
 
 
-def compute_div(v, e, scheme, massive, mass_lumping):
+def compute_div(v, e, scheme='strong', massive=False, mass_lumping=True):
     """
     Compute the divergence of the field data `u` on the element `e`.
 
