@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/194302923.svg)](https://zenodo.org/badge/latestdoi/194302923)
+
 # dgpy
 
 Python library to solve elliptic partial differential equations with
